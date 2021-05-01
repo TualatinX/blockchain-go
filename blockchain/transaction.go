@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"encoding/gob"
+	"fmt"
 )
 
 const reward = 100
@@ -33,6 +34,23 @@ type TxInput struct {
 	Sig string
 	// This would be a script that adds data to an outputs' PubKey
 	// however for this tutorial the Sig will be indentical to the PubKey.
+}
+
+// CoinbaseTx is the function that will run when someone on a node succesfully "mines" a block. The reward inside as it were.
+func CoinbaseTx(toAddress, data string) *Transaction {
+	if data == "" {
+		data = fmt.Sprintf("Coins to %s", toAddress)
+	}
+	// Since this is the "first" transaction of the block, it has no previous output to reference.
+	// This means that we initialize it with no ID, and it's OutputIndex is -1
+	txIn := TxInput{[]byte{}, -1, data}
+	// txOut will represent the amount of tokens(reward) given to the person(toAddress) that executed CoinbaseTx
+	txOut := TxOutput{reward, toAddress} // You can see it follows {value, PubKey}
+
+	tx := Transaction{nil, []TxInput{txIn}, []TxOutput{txOut}}
+
+	return &tx
+
 }
 
 func (tx *Transaction) SetID() {
