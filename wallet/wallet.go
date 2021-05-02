@@ -24,6 +24,12 @@ type Wallet struct {
 	PublicKey []byte
 }
 
+func MakeWallet() *Wallet {
+	privateKey, publicKey := NewKeyPair()
+	wallet := Wallet{privateKey, publicKey}
+	return &wallet
+}
+
 func NewKeyPair() (ecdsa.PrivateKey, []byte) {
 	curve := elliptic.P256()
 
