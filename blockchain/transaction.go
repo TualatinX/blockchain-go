@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"encoding/gob"
+	"encoding/hex"
 	"fmt"
+	"log"
 )
 
 const reward = 100
@@ -77,4 +79,41 @@ func (out *TxOutput) CanBeUnlocked(data string) bool {
 func (tx *Transaction) IsCoinbase() bool {
 	// This checks a transaction and will only return true if it is a newly minted "coin"
 	return len(tx.Inputs) == 1 && len(tx.Inputs[0].ID) == 0 && tx.Inputs[0].Out == -1
+}
+
+// Find Spendable Outputs
+// Check if we have enough money to send the amount that we are asking
+// If we do, make inputs that point to the outputs we are spending
+// If there is any leftover money, make new outputs from the difference.
+// Initialize a new transaction with all the new inputs and outputs we made
+// Set a new ID, and return it.
+func NewTransaction(from, to string, amount int, chain *BlockChain) *Transaction {
+	var inputs []TxInput
+	var outputs []TxOutput
+
+	acc, validOutputs := chain.FindSpendableOutputs(from, amount)
+
+	if acc < amount {
+		log.Panic("Error: Not enough funds!")
+	}
+	for txid, outs := range validOutputs {
+		txID, err := hex.DecodeString(txid)
+		Handle(err)
+
+		for _, out := range outs {
+			input := TxInput{txID, out, from}
+			inputs = append(inputs, input)
+		}
+	}
+
+	outputs = append(outputs, TxOutput{amount, to})
+
+	if acc > amount {
+		outputs = append(outputs, TxOutput{acc - amount, from})
+	}
+
+	tx := Transaction{nil, inputs, outputs}
+	tx.SetID()
+
+	return &tx
 }
