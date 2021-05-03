@@ -1,6 +1,7 @@
 package blockchain
 
 import (
+	"blockchain-go/wallet"
 	"bytes"
 	"crypto/ecdsa"
 	"crypto/elliptic"
@@ -73,11 +74,11 @@ func CoinbaseTx(toAddress, data string) *Transaction {
 	}
 	// Since this is the "first" transaction of the block, it has no previous output to reference.
 	// This means that we initialize it with no ID, and it's OutputIndex is -1
-	txIn := TxInput{[]byte{}, -1, data}
+	txIn := TxInput{[]byte{}, -1, nil, []byte(data)}
 	// txOut will represent the amount of tokens(reward) given to the person(toAddress) that executed CoinbaseTx
-	txOut := TxOutput{reward, toAddress} // You can see it follows {value, PubKey}
+	txOut := NewTXOutput(reward, toAddress) // You can see it follows {value, PubKey}
 
-	tx := Transaction{nil, []TxInput{txIn}, []TxOutput{txOut}}
+	tx := Transaction{nil, []TxInput{txIn}, []TxOutput{*txOut}}
 
 	return &tx
 
@@ -110,7 +111,12 @@ func NewTransaction(from, to string, amount int, chain *BlockChain) *Transaction
 	var inputs []TxInput
 	var outputs []TxOutput
 
-	acc, validOutputs := chain.FindSpendableOutputs(from, amount)
+	wallets, err := wallet.CreateWallets()
+	Handle(err)
+	w := wallets.GetWallet(from)
+	pubKeyHash := wallet.PublicKeyHash(w.PublicKey)
+
+	acc, validOutputs := chain.FindSpendableOutputs(pubKeyHash, amount)
 
 	if acc < amount {
 		log.Panic("Error: Not enough funds!")
@@ -120,19 +126,20 @@ func NewTransaction(from, to string, amount int, chain *BlockChain) *Transaction
 		Handle(err)
 
 		for _, out := range outs {
-			input := TxInput{txID, out, from}
+			input := TxInput{txID, out, nil, w.PublicKey}
 			inputs = append(inputs, input)
 		}
 	}
 
-	outputs = append(outputs, TxOutput{amount, to})
+	outputs = append(outputs, *NewTXOutput(amount, to))
 
 	if acc > amount {
-		outputs = append(outputs, TxOutput{acc - amount, from})
+		outputs = append(outputs, *NewTXOutput(acc-amount, from))
 	}
 
 	tx := Transaction{nil, inputs, outputs}
-	tx.SetID()
+	tx.ID = tx.Hash()
+	chain.SignTransaction(&tx, w.PrivateKey)
 
 	return &tx
 }
