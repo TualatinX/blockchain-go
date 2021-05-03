@@ -1,13 +1,15 @@
 package blockchain
 
+import (
+	"blockchain-go/wallet"
+	"bytes"
+)
+
 type TxOutput struct {
 	// Value would be representative of the amount of coins in a transaction
 	Value int
 
-	// The Pubkey is needed to "unlock" any coins within an Output. This indicated that YOU are the one that sent it.
-	// You are indentifiable by your PubKey
-	// PubKey in this iteration will be very straightforward, however in an actual application this is a more complex algorithm
-	PubKey string
+	PubKeyHash []byte
 }
 
 //TxInput is representative of a reference to a previous TxOutput
@@ -19,13 +21,27 @@ type TxInput struct {
 	// For example if a transaction has 4 outputs, we can use this "Out" field to specify which output we are looking for
 	Out int
 
-	// This would be a script that adds data to an outputs' PubKey. However for this tutorial the Sig will be indentical to the PubKey.
-	Sig string
+	Signature []byte
+	PubKey    []byte
 }
 
-func (in *TxInput) CanUnlock(data string) bool {
-	return in.Sig == data
+func NewTXOutput(value int, address string) *TxOutput {
+	txo := &TxOutput{value, nil}
+	txo.Lock([]byte(address))
+	return txo
 }
-func (out *TxOutput) CanBeUnlocked(data string) bool {
-	return out.PubKey == data
+
+func (in *TxInput) UsesKey(pubKeyHash []byte) bool {
+	lockingHash := wallet.PublicKeyHash(in.PubKey)
+	return bytes.Equal(lockingHash, pubKeyHash)
+}
+
+func (out *TxOutput) Lock(address []byte) {
+	pubKeyHash := wallet.Base58Decode(address)
+	pubKeyHash = pubKeyHash[1 : len(pubKeyHash)-wallet.ChecksumLength]
+	out.PubKeyHash = pubKeyHash
+}
+func (out *TxOutput) IsLockedWithKey(pubKeyHash []byte) bool {
+	return bytes.Equal(out.PubKeyHash, pubKeyHash)
+
 }

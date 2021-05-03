@@ -12,10 +12,10 @@ import (
 )
 
 const (
-	checksumLength = 4
+	ChecksumLength = 4
 
 	// hexadecimal representation of 0
-	version = byte(0x00)
+	Version = byte(0x00)
 )
 
 type Wallet struct {
@@ -61,28 +61,28 @@ func Checksum(ripeMdHash []byte) []byte {
 	firstHash := sha256.Sum256(ripeMdHash)
 	secondHash := sha256.Sum256(firstHash[:])
 
-	return secondHash[:checksumLength]
+	return secondHash[:ChecksumLength]
 }
 
 func (w *Wallet) Address() []byte {
 	// Step 1/2
 	pubHash := PublicKeyHash(w.PublicKey)
 	//Step 3
-	versionedHash := append([]byte{version}, pubHash...)
+	versionedHash := append([]byte{Version}, pubHash...)
 	//Step 4
 	checksum := Checksum(versionedHash)
 	//Step 5
 	finalHash := append(versionedHash, checksum...)
 	//Step 6
-	address := base58Encode(finalHash)
+	address := Base58Encode(finalHash)
 	return address
 }
 
 func ValidateAddress(address string) bool {
-	pubKeyHash := base58Decode([]byte(address))
-	actualChecksum := pubKeyHash[len(pubKeyHash)-checksumLength:]
+	pubKeyHash := Base58Decode([]byte(address))
+	actualChecksum := pubKeyHash[len(pubKeyHash)-ChecksumLength:]
 	version := pubKeyHash[0]
-	pubKeyHash = pubKeyHash[1 : len(pubKeyHash)-checksumLength]
+	pubKeyHash = pubKeyHash[1 : len(pubKeyHash)-ChecksumLength]
 	targetChecksum := Checksum(append([]byte{version}, pubKeyHash...))
 
 	return bytes.Equal(targetChecksum, actualChecksum)
