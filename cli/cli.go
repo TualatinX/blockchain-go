@@ -46,6 +46,9 @@ func (cli *CommandLine) printChain() {
 		fmt.Printf("hash: %x\n", block.Hash)
 		pow := blockchain.NewProofOfWork(block)
 		fmt.Printf("Pow: %s\n", strconv.FormatBool(pow.Validate()))
+		for _, tx := range block.Transactions {
+			fmt.Println(tx)
+		}
 		fmt.Println()
 		// This works because the Genesis block has no PrevHash to point to.
 		if len(block.PrevHash) == 0 {
@@ -56,17 +59,26 @@ func (cli *CommandLine) printChain() {
 
 // Creates a blockchain and awards address the coinbase
 func (cli *CommandLine) createBlockChain(address string) {
+	if !wallet.ValidateAddress(address) {
+		log.Panic("Address is not valid")
+	}
 	newChain := blockchain.InitBlockChain(address)
 	newChain.Database.Close()
 	fmt.Println("Finished creating chain")
 }
 
 func (cli *CommandLine) getBalance(address string) {
+	if !wallet.ValidateAddress(address) {
+		log.Panic("Address is not valid")
+	}
+
 	chain := blockchain.ContinueBlockChain(address)
 	defer chain.Database.Close()
 
 	balance := 0
-	UTXOs := chain.FindUTXO(address)
+	pubKeyHash := wallet.Base58Decode([]byte(address))
+	pubKeyHash = pubKeyHash[1 : len(pubKeyHash)-wallet.ChecksumLength]
+	UTXOs := chain.FindUTXO(pubKeyHash)
 
 	for _, out := range UTXOs {
 		balance += out.Value
@@ -76,6 +88,13 @@ func (cli *CommandLine) getBalance(address string) {
 }
 
 func (cli *CommandLine) send(from, to string, amount int) {
+	if !wallet.ValidateAddress(from) {
+		log.Panic("Address is not valid")
+	}
+	if !wallet.ValidateAddress(to) {
+		log.Panic("Address is not valid")
+	}
+
 	chain := blockchain.ContinueBlockChain(from)
 	defer chain.Database.Close()
 
