@@ -79,6 +79,7 @@ func CoinbaseTx(toAddress, data string) *Transaction {
 	txOut := NewTXOutput(reward, toAddress) // You can see it follows {value, PubKey}
 
 	tx := Transaction{nil, []TxInput{txIn}, []TxOutput{*txOut}}
+	tx.SetID()
 
 	return &tx
 
