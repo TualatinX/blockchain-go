@@ -97,7 +97,12 @@ func (u *UTXOSet) Update(block *Block) {
 					inID := append(utxoPrefix, in.ID...)
 					item, err := txn.Get(inID)
 					Handle(err)
-					v, err := item.Value()
+					var v []byte
+					err = item.Value(func(val []byte) error {
+						v = val
+						return nil
+					})
+					// v, err := item.Value()
 					Handle(err)
 
 					outs := DeserializeOutputs(v)
