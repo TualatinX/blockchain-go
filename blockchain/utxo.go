@@ -1,6 +1,7 @@
 package blockchain
 
 import (
+	"encoding/hex"
 	"log"
 
 	"github.com/dgraph-io/badger"
@@ -59,4 +60,100 @@ func (u *UTXOSet) DeleteByPrefix(prefix []byte) {
 		}
 		return nil
 	})
+}
+
+func (u UTXOSet) Reindex() {
+	db := u.Blockchain.Database
+
+	u.DeleteByPrefix(utxoPrefix)
+
+	UTXO := u.Blockchain.FindUTXO()
+
+	err := db.Update(func(txn *badger.Txn) error {
+		for txId, outs := range UTXO {
+			key, err := hex.DecodeString(txId)
+			if err != nil {
+				return err
+			}
+			key = append(utxoPrefix, key...)
+
+			err = txn.Set(key, outs.Serialize())
+			Handle(err)
+		}
+
+		return nil
+	})
+	Handle(err)
+}
+
+func (u *UTXOSet) Update(block *Block) {
+	db := u.Blockchain.Database
+
+	err := db.Update(func(txn *badger.Txn) error {
+		for _, tx := range block.Transactions {
+			if tx.IsCoinbase() == false {
+				for _, in := range tx.Inputs {
+					updatedOuts := TxOutputs{}
+					inID := append(utxoPrefix, in.ID...)
+					item, err := txn.Get(inID)
+					Handle(err)
+					v, err := item.Value()
+					Handle(err)
+
+					outs := DeserializeOutputs(v)
+
+					for outIdx, out := range outs.Outputs {
+						if outIdx != in.Out {
+							updatedOuts.Outputs = append(updatedOuts.Outputs, out)
+						}
+					}
+
+					if len(updatedOuts.Outputs) == 0 {
+						if err := txn.Delete(inID); err != nil {
+							log.Panic(err)
+						}
+
+					} else {
+						if err := txn.Set(inID, updatedOuts.Serialize()); err != nil {
+							log.Panic(err)
+						}
+					}
+				}
+			}
+
+			newOutputs := TxOutputs{}
+			for _, out := range tx.Outputs {
+				newOutputs.Outputs = append(newOutputs.Outputs, out)
+			}
+
+			txID := append(utxoPrefix, tx.ID...)
+			if err := txn.Set(txID, newOutputs.Serialize()); err != nil {
+				log.Panic(err)
+			}
+		}
+
+		return nil
+	})
+	Handle(err)
+}
+
+func (u UTXOSet) CountTransactions() int {
+	db := u.Blockchain.Database
+	counter := 0
+
+	err := db.View(func(txn *badger.Txn) error {
+		opts := badger.DefaultIteratorOptions
+
+		it := txn.NewIterator(opts)
+		defer it.Close()
+		for it.Seek(utxoPrefix); it.ValidForPrefix(utxoPrefix); it.Next() {
+			counter++
+		}
+
+		return nil
+	})
+
+	Handle(err)
+
+	return counter
 }
