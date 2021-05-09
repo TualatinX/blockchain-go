@@ -292,7 +292,7 @@ func HandleGetData(request []byte, chain *blockchain.BlockChain) {
 			return
 		}
 
-		SendBlock(payload.AddrFrom, &block)
+		SendBlock(payload.AddrFrom, block)
 	}
 
 	if payload.Type == "tx" {
