@@ -63,7 +63,7 @@ func (u *UTXOSet) DeleteByPrefix(prefix []byte) {
 	})
 }
 
-func (u UTXOSet) Reindex() {
+func (u UTXOSet) ReIndex() {
 	db := u.Blockchain.Database
 
 	u.DeleteByPrefix(utxoPrefix)
