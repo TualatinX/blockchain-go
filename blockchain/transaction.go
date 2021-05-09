@@ -70,16 +70,19 @@ func (tx *Transaction) Hash() []byte {
 // CoinbaseTx is the function that will run when someone on a node succesfully "mines" a block. The reward inside as it were.
 func CoinbaseTx(toAddress, data string) *Transaction {
 	if data == "" {
-		data = fmt.Sprintf("Coins to %s", toAddress)
+		randData := make([]byte, 24)
+		_, err := rand.Read(randData)
+		Handle(err)
+		data = fmt.Sprintf("%x", randData)
 	}
 	// Since this is the "first" transaction of the block, it has no previous output to reference.
 	// This means that we initialize it with no ID, and it's OutputIndex is -1
 	txIn := TxInput{[]byte{}, -1, nil, []byte(data)}
 	// txOut will represent the amount of tokens(reward) given to the person(toAddress) that executed CoinbaseTx
-	txOut := NewTXOutput(reward, toAddress) // You can see it follows {value, PubKey}
+	txOut := NewTXOutput(20, toAddress) // You can see it follows {value, PubKey}
 
 	tx := Transaction{nil, []TxInput{txIn}, []TxOutput{*txOut}}
-	tx.SetID()
+	tx.ID = tx.Hash()
 
 	return &tx
 
