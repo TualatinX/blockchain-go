@@ -379,7 +379,7 @@ func MineTx(chain *blockchain.BlockChain) {
 
 	newBlock := chain.MineBlock(txs)
 	UTXOSet := blockchain.UTXOSet{chain}
-	UTXOSet.Reindex()
+	UTXOSet.ReIndex()
 
 	fmt.Println("New Block mined")
 
@@ -396,6 +396,43 @@ func MineTx(chain *blockchain.BlockChain) {
 
 	if len(memoryPool) > 0 {
 		MineTx(chain)
+	}
+}
+
+func HandleInv(request []byte, chain *blockchain.BlockChain) {
+	var buff bytes.Buffer
+	var payload Inv
+
+	buff.Write(request[commandLength:])
+	dec := gob.NewDecoder(&buff)
+	err := dec.Decode(&payload)
+	if err != nil {
+		log.Panic(err)
+	}
+
+	fmt.Printf("Recevied inventory with %d %s\n", len(payload.Items), payload.Type)
+
+	if payload.Type == "block" {
+		blocksInTransit = payload.Items
+
+		blockHash := payload.Items[0]
+		SendGetData(payload.AddrFrom, "block", blockHash)
+
+		newInTransit := [][]byte{}
+		for _, b := range blocksInTransit {
+			if bytes.Compare(b, blockHash) != 0 {
+				newInTransit = append(newInTransit, b)
+			}
+		}
+		blocksInTransit = newInTransit
+	}
+
+	if payload.Type == "tx" {
+		txID := payload.Items[0]
+
+		if memoryPool[hex.EncodeToString(txID)].ID == nil {
+			SendGetData(payload.AddrFrom, "tx", txID)
+		}
 	}
 }
 
@@ -428,4 +465,30 @@ func HandleConnection(conn net.Conn, chain *blockchain.BlockChain) {
 		fmt.Println("Unknown command")
 	}
 
+}
+
+func StartServer(nodeID, minerAddress string) {
+	nodeAddress = fmt.Sprintf("localhost:%s", nodeID)
+	mineAddress = minerAddress
+	ln, err := net.Listen(protocol, nodeAddress)
+	if err != nil {
+		log.Panic(err)
+	}
+	defer ln.Close()
+
+	chain := blockchain.ContinueBlockChain(nodeID)
+	defer chain.Database.Close()
+	go CloseDB(chain)
+
+	if nodeAddress != KnownNodes[0] {
+		SendVersion(KnownNodes[0], chain)
+	}
+	for {
+		conn, err := ln.Accept()
+		if err != nil {
+			log.Panic(err)
+		}
+		go HandleConnection(conn, chain)
+
+	}
 }
