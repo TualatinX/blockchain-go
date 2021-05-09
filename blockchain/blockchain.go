@@ -154,11 +154,17 @@ func (chain *BlockChain) FindUTXO() map[string]TxOutputs {
 	return UTXO
 }
 
-func (chain *BlockChain) MineBlock(transactions []*Transaction) *Block {
-	var lastHash []byte
-	var lastHeight int
+func (chain *BlockChain) AddBlock(block *Block) {
+	var lastHash, lastBlockData []byte
+	err := chain.Database.Update(func(txn *badger.Txn) error {
+		if _, err := txn.Get(block.Hash); err == nil {
+			return nil
+		}
 
-	err := chain.Database.View(func(txn *badger.Txn) error {
+		blockData := block.Serialize()
+		err := txn.Set(block.Hash, blockData)
+		Handle(err)
+
 		item, err := txn.Get([]byte("lh"))
 		Handle(err)
 		err = item.Value(func(val []byte) error {
@@ -166,18 +172,72 @@ func (chain *BlockChain) MineBlock(transactions []*Transaction) *Block {
 			return nil
 		})
 		Handle(err)
+
+		item, err = txn.Get(lastHash)
+		Handle(err)
+		err = item.Value(func(val []byte) error {
+			lastBlockData = val
+			return nil
+		})
+		Handle(err)
+
+		lastBlock := Deserialize(lastBlockData)
+
+		if block.Height > lastBlock.Height {
+			err = txn.Set([]byte("lh"), block.Hash)
+			Handle(err)
+			chain.LastHash = block.Hash
+		}
+
+		return nil
+	})
+	Handle(err)
+}
+
+func (chain *BlockChain) MineBlock(transactions []*Transaction) *Block {
+	var lastHash, lastBlockData []byte
+	var lastHeight int
+
+	for _, tx := range transactions {
+		if !chain.VerifyTransaction(tx) {
+			log.Panic("Invalid Transaction")
+		}
+	}
+
+	err := chain.Database.View(func(txn *badger.Txn) error {
+
+		item, err := txn.Get([]byte("lh"))
+		Handle(err)
+		err = item.Value(func(val []byte) error {
+			lastHash = val
+			return nil
+		})
+		Handle(err)
+
+		item, err = txn.Get(lastHash)
+		Handle(err)
+		err = item.Value(func(val []byte) error {
+			lastBlockData = val
+			return nil
+		})
+		Handle(err)
+
+		lastBlock := Deserialize(lastBlockData)
+		lastHeight = lastBlock.Height
+
 		return err
 	})
 	Handle(err)
 
-	newBlock := CreateBlock(transactions, lastHash)
+	newBlock := CreateBlock(transactions, lastHash, lastHeight+1)
 
-	err = chain.Database.Update(func(transaction *badger.Txn) error {
-		err := transaction.Set(newBlock.Hash, newBlock.Serialize())
+	err = chain.Database.Update(func(txn *badger.Txn) error {
+		err := txn.Set(newBlock.Hash, newBlock.Serialize())
 		Handle(err)
-		err = transaction.Set([]byte("lh"), newBlock.Hash)
+		err = txn.Set([]byte("lh"), newBlock.Hash)
 
 		chain.LastHash = newBlock.Hash
+
 		return err
 	})
 	Handle(err)
@@ -185,7 +245,66 @@ func (chain *BlockChain) MineBlock(transactions []*Transaction) *Block {
 	return newBlock
 }
 
-//blockchain.go
+func (chain *BlockChain) GetBlock(blockHash []byte) (*Block, error) {
+	var block *Block
+
+	err := chain.Database.View(func(txn *badger.Txn) error {
+		blockRecord, err := txn.Get(blockHash)
+		if err != nil {
+			return errors.New("Block is not found")
+		}
+
+		err = blockRecord.Value(func(val []byte) error {
+			block = Deserialize(val)
+			return nil
+		})
+		return err
+	})
+
+	return block, err
+}
+
+func (chain *BlockChain) GetBlockHashes() [][]byte {
+	var hashes [][]byte
+
+	iter := chain.Iterator()
+	for {
+		block := iter.Next()
+
+		hashes = append(hashes, block.Hash)
+
+		if len(block.PrevHash) == 0 {
+			break
+		}
+
+	}
+	return hashes
+}
+
+func (chain *BlockChain) getLastBlock() *Block {
+
+	var block *Block
+
+	err := chain.Database.View(func(txn *badger.Txn) error {
+		record, err := txn.Get([]byte("lh"))
+		Handle(err)
+
+		err = record.Value(func(lastHash []byte) error {
+			block, err = chain.GetBlock(lastHash)
+			return err
+		})
+		return err
+	})
+
+	Handle(err)
+	return block
+}
+
+func (chain *BlockChain) GetBestHeight() int {
+	lastBlock := chain.getLastBlock()
+	return lastBlock.Height
+}
+
 func (chain *BlockChain) Iterator() *BlockChainIterator {
 	iterator := BlockChainIterator{chain.LastHash, chain.Database}
 
