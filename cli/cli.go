@@ -2,6 +2,7 @@ package cli
 
 import (
 	"blockchain-go/blockchain"
+	"blockchain-go/network"
 	"blockchain-go/wallet"
 	"flag"
 	"fmt"
@@ -19,10 +20,11 @@ func (cli *CommandLine) printUsage() {
 	fmt.Println("getbalance -address ADDRESS - get balance for ADDRESS")
 	fmt.Println("createblockchain -address ADDRESS creates a blockchain and rewards the mining fee")
 	fmt.Println("printchain - Prints the blocks in the chain")
-	fmt.Println("send -from FROM -to TO -amount AMOUNT - Send amount of coins from one address to another")
+	fmt.Println("send -from FROM -to TO -amount AMOUNT -mine - Send amount of coins from one address to another. Then -mine flag is set, mine off of this node")
 	fmt.Println("createwallet - Creates a new wallet")
 	fmt.Println("listaddresses - Lists the addresses in the wallet file")
 	fmt.Println("reindexutxo - Rebuilds the UTXO set")
+	println(" startnode [-miner] ADDRESS - Starts a node with ID specified in NODE_ID environment variable, -miner flag sets the node to be a miner")
 }
 
 // validateArgs ensures the cli was given valid input
@@ -142,6 +144,20 @@ func (cli *CommandLine) reIndexUTXO() {
 
 	count := UTXOSet.CountTransactions()
 	fmt.Printf("Done! There are %d UTXOs in the database\n", count)
+}
+
+func (cli *CommandLine) startNode(nodeID, minerAddress string) {
+	fmt.Printf("Starting Node %s\n", nodeID)
+	if len(minerAddress) > 0 {
+		if wallet.ValidateAddress(minerAddress) {
+			fmt.Printf("Node is a miner, wallet address for rewards: %s\n", minerAddress)
+		} else {
+			log.Panic("Miner address is not valid!")
+		}
+	}
+
+	network.StartServer(nodeID, minerAddress)
+
 }
 
 //run will start up the command line
