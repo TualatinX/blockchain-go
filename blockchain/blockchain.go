@@ -6,17 +6,20 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"log"
 	"os"
+	"path/filepath"
 	"runtime"
+	"strings"
 
 	"github.com/dgraph-io/badger" // This is our database import
 )
 
 const (
-	dbPath = "./tmp/blocks"
+	dbPath = "./tmp/blocks_%s"
 
-	// This can be used to verify that the blockchain exists
-	dbFile = "./tmp/blocks/MANIFEST"
+	// // This can be used to verify that the blockchain exists
+	// dbFile = "./tmp/blocks/MANIFEST"
 
 	// This is arbitrary data for our genesis block
 	genesisData = "First Transaction from Genesis"
@@ -34,24 +37,26 @@ type BlockChainIterator struct {
 }
 
 // DBexists checks to see if we've initialized a database
-func DBexists() bool {
-	if _, err := os.Stat(dbFile); os.IsNotExist(err) {
+func DBexists(path string) bool {
+	if _, err := os.Stat(path + "/MANIFEST"); os.IsNotExist(err) {
 		return false
 	}
 	return true
 }
 
 // InitBlockChain will be what starts a new blockChain
-func InitBlockChain(address string) *BlockChain {
+func InitBlockChain(address, nodeId string) *BlockChain {
 	var lastHash []byte
 
-	if DBexists() {
-		fmt.Println("blockchain already exists")
+	path := fmt.Sprintf(dbPath, nodeId)
+	if DBexists(path) {
+		fmt.Println("Blockchain already exists")
 		runtime.Goexit()
 	}
 
-	opts := badger.DefaultOptions(dbPath)
-	db, err := badger.Open(opts)
+	opts := badger.DefaultOptions(path)
+	opts.Logger = nil
+	db, err := openDB(path, opts)
 	Handle(err)
 
 	err = db.Update(func(txn *badger.Txn) error {
@@ -76,16 +81,20 @@ func InitBlockChain(address string) *BlockChain {
 }
 
 // ContinueBlockChain will be called to append to an existing blockchain
-func ContinueBlockChain(address string) *BlockChain {
-	if !DBexists() {
+func ContinueBlockChain(nodeId string) *BlockChain {
+	path := fmt.Sprintf(dbPath, nodeId)
+
+	if !DBexists(path) {
 		fmt.Println("No blockchain found, please create one first")
 		runtime.Goexit()
 	}
 
 	var lastHash []byte
 
-	opts := badger.DefaultOptions(dbPath)
-	db, err := badger.Open(opts)
+	opts := badger.DefaultOptions(path)
+	opts.Logger = nil
+
+	db, err := openDB(path, opts)
 	Handle(err)
 
 	err = db.Update(func(txn *badger.Txn) error {
@@ -145,8 +154,9 @@ func (chain *BlockChain) FindUTXO() map[string]TxOutputs {
 	return UTXO
 }
 
-func (chain *BlockChain) AddBlock(transactions []*Transaction) *Block {
+func (chain *BlockChain) MineBlock(transactions []*Transaction) *Block {
 	var lastHash []byte
+	var lastHeight int
 
 	err := chain.Database.View(func(txn *badger.Txn) error {
 		item, err := txn.Get([]byte("lh"))
@@ -243,4 +253,30 @@ func (chain *BlockChain) VerifyTransaction(tx *Transaction) bool {
 		prevTXs[hex.EncodeToString(prevTX.ID)] = prevTX
 	}
 	return tx.Verify(prevTXs)
+}
+
+func retry(dir string, originalOpts badger.Options) (*badger.DB, error) {
+	lockPath := filepath.Join(dir, "LOCK")
+	if err := os.Remove(lockPath); err != nil {
+		return nil, fmt.Errorf(`removing "LOCK": %s`, err)
+	}
+	retryOpts := originalOpts
+	retryOpts.Truncate = true
+	db, err := badger.Open(retryOpts)
+	return db, err
+}
+
+func openDB(dir string, opts badger.Options) (*badger.DB, error) {
+	if db, err := badger.Open(opts); err != nil {
+		if strings.Contains(err.Error(), "LOCK") {
+			if db, err := retry(dir, opts); err == nil {
+				log.Println("database unlocked, value log truncated")
+				return db, nil
+			}
+			log.Println("could not unlock database:", err)
+		}
+		return nil, err
+	} else {
+		return db, nil
+	}
 }
