@@ -1,11 +1,11 @@
 package cli
 
 import (
-	"blockchain-go/blockchain"
-	"blockchain-go/network"
-	"blockchain-go/wallet"
 	"flag"
 	"fmt"
+	"github.com/TualatinX/blockchain-go/blockchain"
+	"github.com/TualatinX/blockchain-go/network"
+	"github.com/TualatinX/blockchain-go/wallet"
 	"log"
 	"os"
 	"runtime"

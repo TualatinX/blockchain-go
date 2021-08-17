@@ -1,7 +1,7 @@
 package main
 
 import (
-	"blockchain-go/cli"
+	"github.com/TualatinX/blockchain-go/cli"
 	"os"
 )
 

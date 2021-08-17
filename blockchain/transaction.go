@@ -1,7 +1,6 @@
 package blockchain
 
 import (
-	"blockchain-go/wallet"
 	"bytes"
 	"crypto/ecdsa"
 	"crypto/elliptic"
@@ -13,6 +12,8 @@ import (
 	"log"
 	"math/big"
 	"strings"
+
+	"github.com/TualatinX/blockchain-go/wallet"
 )
 
 const reward = 100

@@ -1,4 +1,4 @@
-module blockchain-go
+module github.com/TualatinX/blockchain-go
 
 go 1.16
 

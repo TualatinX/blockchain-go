@@ -1,11 +1,11 @@
 package network
 
 import (
-	"blockchain-go/blockchain"
 	"bytes"
 	"encoding/gob"
 	"encoding/hex"
 	"fmt"
+	"github.com/TualatinX/blockchain-go/blockchain"
 	"io"
 	"io/ioutil"
 	"log"

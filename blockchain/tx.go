@@ -1,9 +1,10 @@
 package blockchain
 
 import (
-	"blockchain-go/wallet"
 	"bytes"
 	"encoding/gob"
+
+	"github.com/TualatinX/blockchain-go/wallet"
 )
 
 type TxOutput struct {
